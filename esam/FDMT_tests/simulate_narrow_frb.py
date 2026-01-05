@@ -5,6 +5,16 @@ from numba import njit, prange
 
 @njit(fastmath=True, locals={'val':numba.float32, 'tot_samps_dispersed':numba.int64}, parallel=True)
 def make_pure_frb(nsamps, nch, tx, dm, fchans, chw_2, tpulse):
+    '''
+    Make an FDMT narrow FRB with the given parameters
+    nsamps: number of samples
+    nch: number of channels
+    tx: total flux
+    dm: dispersion measure - samples
+    fchans: frequency channels
+    chw_2: channel width ?
+    tpulse: start time of FRB in samples
+    '''
     x = np.empty((nch, nsamps), dtype=np.float32)
     fbottom = fchans[0] - chw_2
     ftop = fchans[-1] + chw_2
