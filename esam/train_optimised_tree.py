@@ -1,12 +1,23 @@
 import sys
-sys.path.append("/home/gup037/Codes/ESAM/esam")
+import os
+# Add the esam directory to the path so we can import modules
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+#sys.path.append("/home/gup037/Codes/ESAM/esam")
 import esam, traces
 
-sys.path.append("/home/gup037/Codes/ESAM/FDMT_tests")
-import simulate_narrow_frb as snf
+#sys.path.append("/home/gup037/Codes/ESAM/FDMT_tests")
+from FDMT_tests import simulate_narrow_frb as snf
 
-sys.path.append("/home/gup037/Codes/ESAM/FDMT_tests/Keiths_FDMT")
-from noc_fdmt import Fdmt as NOC_FDMT
+#sys.path.append("/home/gup037/Codes/ESAM/FDMT_tests/Keiths_FDMT")
+try:
+    from FDMT_tests.Keiths_FDMT import noc_fdmt as NOC_FDMT
+except ImportError:
+    # If Keiths_FDMT doesn't exist, you may need to create it or use an alternative
+    # For now, we'll raise a clear error
+
+    print('Could not import noc_fdmt from FDMT_tests.Keiths_FDMT. Trying CRAFT but it probably wont work')
+    from craft.fdmt import Fdmt as NOC_FDMT
+
 
 from craft import fdmt as FDMT
 import numpy as np
