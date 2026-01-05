@@ -51,7 +51,7 @@ def evaluate_tree_performance(tree, template):
 
 def get_parser():
     a = argparse.ArgumentParser()
-    a.add_argument("-maxdm", type=int, help="MaxDM (def:1000)", default=1000)
+    a.add_argument("-maxdm", type=int, help="MaxDM (def:1000)", default=3000)
     a.add_argument("-dmstep", type=float, help="DM step (def:0,1)", default=0.2)
     a.add_argument("-threshold", type=float, help="Optimisation S/N threshold (def:0.9)", default=0.85)
 
@@ -77,7 +77,7 @@ def main():
             
     #product_counts = np.zeros((len(dm_templates), len(tree.count_all_pids())))
 
-    outbasename = f"final_optimised_esam_tree_fast_with_traces_0_{max_dm}_{dm_step}_nchnch}_threshold_{threshold}.pkl"
+    outbasename = f"final_optimised_esam_tree_fast_with_traces_0_{max_dm}_{dm_step}_nch{nch}_threshold_{threshold}.pkl"
     #outbasename = f"final_optimised_fdmt_tree_fast_with_traces_0_{max_dm}_{dm_step}_nch256_threshold_{threshold}.pkl"
 
     product_id_to_dm_map = open(f"prod_to_dm_map_for_{outbasename}.txt", 'w')
