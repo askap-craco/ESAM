@@ -272,7 +272,6 @@ class EsamTree:
      
     
     def __call__(self, din, squared_weights = False):
-      try:
         assert din.shape[0] == self.nchan
         nt = din.shape[1]
         dout = np.zeros((self.nprod, nt)) # NT here is a bit tricky
@@ -285,41 +284,16 @@ class EsamTree:
             nf2 = self.nchan // 2 
             lower = self.lower(din[:nf2,...], squared_weights)
             upper = self.upper(din[nf2:,...], squared_weights)
-            for iprod, prod in enumerate(self._products):
-                #print(f"self.nchan is {self.nchan}, self._ichan is {self._ichan}, prod.offset is {prod.offset}")
-                #print(f"upper is {upper}")
-                #print(f"lower is {lower}")
-
-                #print(f"Nprod is {self.nprod}")
-                
+            for iprod, prod in enumerate(self._products):               
                 off = prod.offset
-                #if off > 0:
-                #    dout[iprod, :off] = upper[prod.pid_upper, :off]
-                
+
                 dout[iprod, :] = lower[prod.pid_lower, :]
                 if off <= 0:
                     dout[iprod, -off:] += upper[prod.pid_upper, :nt+off]
-
-                    #dout[iprod, -off:] = lower[prod.pid_lower, -off:] + upper[prod.pid_upper, :nt + off]
                 elif off > 0:
                     dout[iprod, :nt-off] += upper[prod.pid_upper, off:]
-                    
-                    
-                    #TODO - fix this
-                    #raise NotImplementedError
-                    #dout[iprod, :nt-off] = upper[prod.pid_upper, :nt-off] + lower[prod.pid_lower, off:] 
 
-                #print(f"dout  is {dout}")
-                #print(f"dout.shape is {dout.shape}")
-                #plt.figure()
-                #plt.imshow(dout, aspect='auto')
-                #plt.show()
-                #dout[iprod, off:] = lower[prod.pid_lower, 0:nt-off] \
-                #        + upper[prod.pid_upper, off:]
         return dout
-      except Exception as E:
-              import IPython
-              IPython.embed()
             
     
 def main():
