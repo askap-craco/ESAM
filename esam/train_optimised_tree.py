@@ -52,8 +52,8 @@ def evaluate_tree_performance(tree, template):
 def get_parser():
     a = argparse.ArgumentParser()
     a.add_argument("-maxdm", type=int, help="MaxDM (def:1000)", default=1000)
-    a.add_argument("-dmstep", type=float, help="DM step (def:0,1)", default=0.1)
-    a.add_argument("-threshold", type=float, help="Optimisation S/N threshold (def:0.9)", default=0.9)
+    a.add_argument("-dmstep", type=float, help="DM step (def:0,1)", default=0.2)
+    a.add_argument("-threshold", type=float, help="Optimisation S/N threshold (def:0.9)", default=0.85)
 
     args = a.parse_args()
     return args
@@ -71,14 +71,13 @@ def main():
     threshold = args.threshold
 
     dm_templates = np.arange(0, max_dm, dm_step)
-
     tree = esam.EsamTree(nch)
     #thefdmt = FDMT.Fdmt(f_min= fchans[0], f_off = chw_2 * 2, n_f = nch, max_dt = dm_templates[-1]+1, n_t = nsamps)
     thefdmt = NOC_FDMT(f_min= fchans[0], f_off = chw_2 * 2, n_f = nch, max_dt = dm_templates[-1]+1, n_t = nsamps)
             
     #product_counts = np.zeros((len(dm_templates), len(tree.count_all_pids())))
 
-    outbasename = f"final_optimised_esam_tree_fast_with_traces_0_{max_dm}_{dm_step}_nch256_threshold_{threshold}.pkl"
+    outbasename = f"final_optimised_esam_tree_fast_with_traces_0_{max_dm}_{dm_step}_nchnch}_threshold_{threshold}.pkl"
     #outbasename = f"final_optimised_fdmt_tree_fast_with_traces_0_{max_dm}_{dm_step}_nch256_threshold_{threshold}.pkl"
 
     product_id_to_dm_map = open(f"prod_to_dm_map_for_{outbasename}.txt", 'w')
@@ -122,15 +121,15 @@ def main():
             brute_force_operations_counter += tot_samps_added - 1
             brute_force_operation_counts.write(f"{pid + 1}\t{idm}\t{brute_force_operations_counter}\n")
 
-            IPython.embed()
+            #IPython.embed()
         else:
             print(f"Skipped")
             #print(f"Template id {ii} with dm {idm} can be recovered by the tree with {(peak_snr / max_snr) * 100}%  recovery, which is above the threshold - {threshold * 100}%")
     
 
-        #Dump the tree every 100 templates
+        #Dump the tree every 5 templates
         if (ii > 0) and (ii % 5 == 0):
-            print("Flishing stuff to disk")
+            print("Fluhing tree to disk")
             np.save(outbasename, tree)
             product_counts.flush()
             product_id_to_dm_map.flush()

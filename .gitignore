@@ -5,3 +5,14 @@
 */__pycache__/
 */*.pyc
 */*/*.pyc
+
+*.npy
+*.pkl
+*.txt
+*.pyc
+
+
+__pycache__
+*.so
+
+
