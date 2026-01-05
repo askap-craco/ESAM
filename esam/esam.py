@@ -2,6 +2,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def sum_at_offset(dout, lower, upper, off):
+    '''
+    Sum lower and upper 1D arrays at a given offset in samples and return in dout.
+    Offset is negative for dedispersion.
+    For offset <= 0, the first off samples is lower only
+    The remainng samples are lower + upper.
+
+    if offset > 0, teh first nt-off samples are lower + upper
+    The remaining off samples are upper only
+    '''
+    dout[:] = lower
+    nt = len(dout)
+    if off <= 0: # this is the usual sign for the dedispersion of an FRB
+        dout[-off:] += upper[:nt+off]
+    elif off > 0:
+        dout[:nt-off] += upper[ off:]
+        
+    return dout
+
+
 class IterProduct:
     def __init__(self, pid_lower, pid_upper, offset):
         self.pid_lower = pid_lower
@@ -102,7 +122,7 @@ def sum_offsets(trace):
 class EsamTree:
     def __init__(self, nchan, ichan = 0, similarity_score = 0.9):
         self._products = [] # list containing Products
-        self.nchan = nchan
+        self.nchan = nchan # number of channels this iteration is responsible for.
         self._ichan = ichan
         #self.similarity_score = 0.9
         self.similarity_score = None
@@ -176,6 +196,7 @@ class EsamTree:
 
         return all_pids
 
+
     def count_all_operations(self, op_counts = None):
         '''
         Counts the number of operations in each iteration and saves them in a list
@@ -221,6 +242,41 @@ class EsamTree:
 
         return pid_counts
 
+    def max_npid_by_iteration(self, pid_counts = None):
+        '''
+        Counts the number of products in each iteration and saves them in a list
+        '''
+
+        if pid_counts is None:
+            pid_counts = [0 for i in range(int(np.log2(self.nchan)) + 1) ]
+
+        list_idx = int(np.log2(self.nchan))
+
+        #print(f"{pid_counts}, {type(pid_counts)}, {pid_counts[list_idx]}, {type(pid_counts[list_idx])}")
+        pid_counts[list_idx] = max(pid_counts[list_idx], len(self._products))
+        
+        if self.nchan > 1:
+            self.lower.max_npid_by_iteration(pid_counts)
+            self.upper.max_npid_by_iteration(pid_counts)
+
+        return pid_counts
+
+    def npid_by_iteration(self, pid_counts = None):
+        '''
+        Counts the number of products in each iteration and saves them in a list
+        '''
+
+        if pid_counts is None:
+            pid_counts = [[] for i in range(int(np.log2(self.nchan)) + 1) ]
+
+        list_idx = int(np.log2(self.nchan))
+        pid_counts[list_idx].append(len(self._products))
+        
+        if self.nchan > 1:
+            self.lower.npid_by_iteration(pid_counts)
+            self.upper.npid_by_iteration(pid_counts)
+
+        return pid_counts
 
     def get_trace_pid(self, trace) -> int:
         '''
@@ -271,7 +327,15 @@ class EsamTree:
         
      
     
-    def __call__(self, din, squared_weights = False):
+    def __call__(self, din, squared_weights = False, lower_chan=0, upper_chan=None):
+        '''
+        Actualy compute ESAM of the given input data
+        din: ndarray with shape (nchan, nt)
+        squared_weights: bool, if True, then the weights are squared
+        lower_chan: int, the channel number of the lower channel - channels below this will be ignored
+        not, calculated and be essentially zero.
+        upper_chan: int, the channel number of the upper channel. Inclusive.
+        '''
         assert din.shape[0] == self.nchan
         nt = din.shape[1]
         dout = np.zeros((self.nprod, nt)) # NT here is a bit tricky
@@ -286,13 +350,7 @@ class EsamTree:
             upper = self.upper(din[nf2:,...], squared_weights)
             for iprod, prod in enumerate(self._products):               
                 off = prod.offset
-
-                dout[iprod, :] = lower[prod.pid_lower, :]
-                if off <= 0:
-                    dout[iprod, -off:] += upper[prod.pid_upper, :nt+off]
-                elif off > 0:
-                    dout[iprod, :nt-off] += upper[prod.pid_upper, off:]
-
+                sum_at_offset(dout[iprod, :], lower[prod.pid_lower, :], upper[prod.pid_upper, :], off)
         return dout
             
     
