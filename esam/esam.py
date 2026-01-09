@@ -4,24 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 
-
-def siblings(start_node):
-    '''
-    Go accross the tree at the same level from lower to upper
-    '''
-    node = start_node
-    while True:
-        yield node
-        if node.parent.lower == node:
-            node = node.parent.upper
-        elif node.parent.upper == node and node.parent is None:
-            break
-        else:
-            node = node.parent.parent.upper.lower
-
         
             
-@njit(fastmath=True)
+@njit(fastmath=True, cache=False)
 def sum_at_offset(dout, lower, upper, off):
     '''
     Sum lower and upper 1D arrays at a given offset in samples and return in dout.
@@ -41,7 +26,7 @@ def sum_at_offset(dout, lower, upper, off):
         
     return dout
 
-@njit
+@njit(cache=False)
 def sum_at_offset_or_copy(dout, lower, upper, off):
     '''
     Handles None values for lower and upper without doing summing
@@ -94,7 +79,7 @@ class IterProduct:
         '''
         off = self.offset
 
-@njit(fastmath=True)
+@njit(fastmath=True, cache=False)
 def convolve_with_kernel(din, kernel, out, squared_weights=False):
     '''
     Convolve the input data with the kernel
@@ -112,7 +97,7 @@ def convolve_with_kernel(din, kernel, out, squared_weights=False):
         vsum = 0
         for ik in range(kernel_size):        
             vsum += din[isamp + ik] * weights[ik]
-            
+
         out[isamp] = vsum        
 
     return out
@@ -437,7 +422,7 @@ class EsamTree:
         return dout
 
 
-    def __call__(self, din, squared_weights = False, lower_chan=0, upper_chan=None):
+    def __call__(self, din, squared_weights = False, lower_chan=0, upper_chan=None, pad_with_zeros=True):
         '''
         Actualy compute ESAM of the given input data
         din: ndarray with shape (nchan, nt)
@@ -446,6 +431,9 @@ class EsamTree:
         not, calculated and be essentially zero. These channel numbers are raw -i.e. at the bottom iteration
         or raw data level. 
         upper_chan: int, the channel number of the upper channel to include. Inclusive.
+        pad_with_zeros: bool, if True, and the channel range has been trimmed, then the output will be as
+        though the input were padded with zeros. If pad_with_zeros is false, it will return the smallest
+        output data that included the specified channel range. 
         '''
         assert din.shape[0] == self.nchan
 
@@ -460,24 +448,36 @@ class EsamTree:
         if out_of_range:
             return None # terminate recursion early if we're outside the channel range. Signals "no data here"
             
-        # get cached output data
-        dout = self.__get_dout(din)
-
         if self.nchan == 1:
             assert din.shape[0] == 1, f'Expected 1 channel. Got {din.shape}'
-            
+             # get cached output data
+            dout = self.__get_dout(din)
             for iprod, prod in enumerate(self._products):
                 dout[iprod, :] = prod(din[0], squared_weights)   #din[0] because din is a 1-D data but has 2-D shape (nf, nt) where nf = 1 
   
         else:
             nf2 = self.nchan // 2 
-            lower = self.lower(din[:nf2,...], squared_weights, lower_chan, upper_chan)
-            upper = self.upper(din[nf2:,...], squared_weights, lower_chan, upper_chan)
+            lower = self.lower(din[:nf2,...], squared_weights, lower_chan, upper_chan, pad_with_zeros)
+            upper = self.upper(din[nf2:,...], squared_weights, lower_chan, upper_chan, pad_with_zeros)
 
-            for iprod, prod in enumerate(self._products):
-                lower_dout = None if lower is None else lower[prod.pid_lower, :]    
-                upper_dout = None if upper is None else upper[prod.pid_upper, :]
-                sum_at_offset_or_copy(dout[iprod, :], lower_dout, upper_dout, prod.offset)
+            # check for early termination - in this case, we don't pad with zeros
+            # we  terminate early if we've been asked to (i.e. pad_width_zero is False)
+            # and either upper or lower has returned None. In that case, we return
+            # the valid data.
+            early_termination = (lower is None or upper is None) and (not pad_with_zeros)
+            assert not (lower is None and upper is None), 'Invalid. Should have quit above'
+            #print(f'{self.nchan} me={self.start_chan}:{self.end_chan} target={lower_chan}:{upper_chan} upper?{upper is None} lower? {lower is None} early?{early_termination}')
+            
+
+            if early_termination:
+                dout = lower if upper is None else upper
+            else:
+                # get cached output data
+                dout = self.__get_dout(din) 
+                for iprod, prod in enumerate(self._products):
+                    lower_dout = None if lower is None else lower[prod.pid_lower, :]    
+                    upper_dout = None if upper is None else upper[prod.pid_upper, :]
+                    sum_at_offset_or_copy(dout[iprod, :], lower_dout, upper_dout, prod.offset)
 
         return dout
             

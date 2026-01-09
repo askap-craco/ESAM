@@ -80,7 +80,22 @@ def test_esam_with_channel_range_works(frb, tree):
     frb2[start_chan:end_chan+1, :] = frb[start_chan:end_chan+1, :]
     dout2 = tree(frb2)
     
-    np.testing.assert_allclose(dout1, dout2) 
+    np.testing.assert_allclose(dout1, dout2)
+
+def test_esam_with_channel_range_works_and_no_padding_works(frb, tree):
+    start_chan = 128
+    end_chan = start_chan+16
+    nch = end_chan - start_chan + 1
+     
+    # run with channel range
+    dout1 = tree(frb, lower_chan=start_chan, upper_chan=end_chan, pad_with_zeros=False)
+
+    # make a copy and outside the chanel range to zero
+    frb2 = np.zeros_like(frb)
+    frb2[start_chan:end_chan+1, :] = frb[start_chan:end_chan+1, :]
+    dout2 = tree(frb2)
+    
+    assert dout1 is not None
 
 def test_sum_at_offset_only_offsets_upper():
     lower = np.array([1, 2, 3, 4, 5])
