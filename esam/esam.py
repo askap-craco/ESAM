@@ -159,6 +159,70 @@ class EndProduct:
         '''
         return out 
 
+class OffsetSeries:
+    def __init__(self, data,offset=0):
+        self._data = data
+        self.offset = offset
+
+class TimeSeriesArray:
+    def __init__(self, nprod, nt, start_chan:int, end_chan:int, data=None):
+        if data is None:
+            self.__data = np.zeros((nprod, nt))
+        else:
+            self.__data = data
+        self.__timeseries = [OffsetSeries(self.__data[i, :], 0) for i in range(nprod)]
+        self.start_chan = start_chan
+        self.end_chan = end_chan
+
+    @property
+    def raw_data(self):
+        return self.__data
+
+    def __getitem__(self, **args):
+        return self.__data.__getitem__(**args)
+
+def add_series_array(lower:TimeSeriesArray, upper:TimeSeriesArray, products:list[IterProduct], dout:TimeSeriesArray):
+    '''
+    Add the upper time series to the lower time series at the given offset
+    '''
+
+    dout.start_chan = lower.start_chan if lower is not None else upper.start_chan
+    dout.end_chan = upper.end_chan if upper is not None else lower.end_chan
+
+    for iprod, prod in enumerate(products):
+        lower = lower.timeseries[prod.pid_lower] if lower is not None else None
+        upper = upper.timeseries[prod.pid_upper] if upper is not None else None
+        sum_offset_series(dout.timeseries[iprod], lower, upper, prod.offset)   
+
+
+def sum_offset_series(tout:OffsetSeries, lower:OffsetSeries, upper:OffsetSeries, offset:int):
+    '''
+    Sum the lower and upper time series at the given offset
+    Tries to do it with pointer maniupulation rather than copying data.
+    Perhaps this is a good thing. We'll see.
+    Should give the same result as sum_at_offset_or_copy but without doing the copy.
+    '''
+    if lower is not None and upper is not None:
+        assert upper.start_chan == lower.end_chan + 1, f'Upper start channel {upper.start_chan} must be one more than lower end channel {lower.end_chan}'
+        sum_at_offset(tout.data, lower.data, upper.data, offset + lower.offset + upper.offset)
+        tout.offset = 0
+    elif lower is not None and upper is None:
+        assert offset <= 0, f'You can copy lower to tout only if offset is negative. Always true for dedispersion'
+        #tout.data[:] = lower.data[:]
+        # avoid copying data. Use pointers.
+        dout.data = lower.data
+        tout.offset = lower.offset # Request offset never applies to lower chan if it's negative. We only apply it to the upper channel
+
+    elif lower is None and upper is not None:
+        assert offset <= 0, 'This is only valid if offset is negative. Always true for dedispersion'         
+        tout.data = upper.data # zero copy
+        tout.offset = upper.offset + offset # Request offset never applies to upper chan if it's positive. We only apply it to the lower channel
+
+    return tout
+
+
+
+
 
 def sum_offsets(trace):
     #print(f"sum_offsets got trace {trace}")
@@ -419,7 +483,8 @@ class EsamTree:
             dout = self.__dout
 
         dout[:] = 0
-        return dout
+
+        return self.__dout
 
 
     def __call__(self, din, squared_weights = False, lower_chan=0, upper_chan=None, pad_with_zeros=True):
