@@ -111,6 +111,21 @@ def test_sum_at_offset_only_offsets_upper():
     # check if upper is zero, it just returns the input
     np.testing.assert_allclose(dout, lower)
 
+def test_sum_at_offset_fast_only_offsets_upper():
+    lower = np.array([1, 2, 3, 4, 5])
+    upper = np.array([6, 7, 8, 9, 10])
+    dout = np.ones_like(lower)*999
+
+    esam.sum_at_offset_fast(dout, lower, upper, -1)
+    np.testing.assert_allclose(dout, [1, 2+6, 3+7, 4+8, 5+9])
+
+
+    # test it just shifts
+    esam.sum_at_offset_fast(dout, lower, upper*0, -1)
+    
+    # check if upper is zero, it just returns the input
+    np.testing.assert_allclose(dout, lower)
+
 def test_sum_at_offsets_or_copy():
     lower = np.array([1, 2, 3, 4, 5])
     upper = np.array([6, 7, 8, 9, 10])
@@ -136,7 +151,8 @@ def test_sum_at_offsets_or_copy():
 
     np.testing.assert_allclose(dout1_copy, dout1)
     np.testing.assert_allclose(dout2_copy, dout2)
-    np.testing.assert_allclose(dout3_copy, dout3)   
+    np.testing.assert_allclose(dout3_copy, dout3)
+
 
 
 def test_convolve_with_kernel_matches_np_convolve():

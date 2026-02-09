@@ -1,9 +1,9 @@
 import numpy as np
-import numba
-from numba import njit, prange
+#import numba
+#from numba import njit, prange
 
 
-@njit(fastmath=True, locals={'val':numba.float32, 'tot_samps_dispersed':numba.int64}, parallel=True)
+#@njit(fastmath=True, locals={'val':numba.float32, 'tot_samps_dispersed':numba.int64}, parallel=True)
 def make_pure_frb(nsamps, nch, tx, dm, fchans, chw_2, tpulse):
     '''
     Make an FDMT narrow FRB with the given parameters
@@ -27,7 +27,7 @@ def make_pure_frb(nsamps, nch, tx, dm, fchans, chw_2, tpulse):
     '''
     tot_samps_dispersed = 0
     
-    for ii in prange(nch):
+    for ii in range(nch):
         ftop_i = fchans[ii] + chw_2
         fbottom_i = fchans[ii] - chw_2
         
@@ -55,7 +55,7 @@ def make_pure_frb(nsamps, nch, tx, dm, fchans, chw_2, tpulse):
             frac_val_tend = tend_frac / dm_i * fluence
             full_samp_val = fluence * (1 / dm_i)
         
-        for jj in prange(nsamps):
+        for jj in range(nsamps):
             if jj == tstart_int:
                 val = frac_val_tstart
                 tot_samps_dispersed = tot_samps_dispersed + 1

@@ -2,11 +2,31 @@ from pprint import PrettyPrinter
 from types import NoneType
 import numpy as np
 import matplotlib.pyplot as plt
-from numba import njit
 
-        
-            
-@njit(fastmath=True, cache=False)
+try :
+    from numba import njit
+except ModuleNotFoundError:
+    print('NUMBA not found. doign noop')
+    def njit( *args, **kwargs):
+        print(f'Njit decorator  {args} {kwargs}')
+
+
+@njit(fastmath=True, cache=True)
+def sum_at_offset_fast(dout, lower, upper, off):
+    nt = len(dout)
+    if off <= 0:
+        for i in range(-off):
+            dout[i] = lower[i]
+        for i in range(-off, nt):
+            dout[i] = lower[i] + upper[i+off]
+    else:
+        for i in range(nt-off):
+            dout[i] = lower[i] + upper[i+off]
+        for i in range(nt-off, nt):
+            dout[i] = upper[i]
+    return dout
+
+#@njit(fastmath=True, cache=False)
 def sum_at_offset(dout, lower, upper, off):
     '''
     Sum lower and upper 1D arrays at a given offset in samples and return in dout.
@@ -26,7 +46,7 @@ def sum_at_offset(dout, lower, upper, off):
         
     return dout
 
-@njit(cache=False)
+#@njit(cache=False)
 def sum_at_offset_or_copy(dout, lower, upper, off):
     '''
     Handles None values for lower and upper without doing summing
@@ -35,7 +55,7 @@ def sum_at_offset_or_copy(dout, lower, upper, off):
     '''
     nt = len(dout)
     if lower is not None and upper is not None:
-        sum_at_offset(dout, lower, upper, off)
+        sum_at_offset_fast(dout, lower, upper, off)
     elif lower is not None and upper is None:
         assert off <= 0, f'You can copy lower to dout only if offset is negative. Always true for dedispersion'
         dout[:] = lower[:] # just a copy
@@ -138,6 +158,7 @@ class EndProduct:
         dout = getattr(self, '_EndProduct__dout', None) # need to do this because pickled tree may not have the attribute
         if dout is None or dout.shape != din.shape:
             dout = np.zeros_like(din)
+            self.__dout = dout
 
         dout[:] = 0
         return dout
@@ -160,12 +181,43 @@ class EndProduct:
         return out 
 
 class OffsetSeries:
-    def __init__(self, data,offset=0):
+    def __init__(self, data, offset:int=0):
         self._data = data
-        self.offset = offset
+        self._offset = offset
+
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @property
+    def data(self):
+        '''
+        Returns copy of teh data offset by the correct amount
+        '''
+        #assert self.offset <= 0, 'Being lazy.'
+        d = np.zeros_like(self._data)
+        if self.offset <= 0:
+            d[-self.offset:] = self._data[:-self.offset]
+        else:
+            d[:-self.offset] = self._data[self.offset:]
+        return d
+
+    def __str__(self):
+        return f'Offset={self.offset} {self.data}'
+
+    __repr__ = __str__
+
+    def __getitem__(self, *args):
+        '''
+        Returns the data with the given offset.. Probably a bad idea.
+        This is lazy but I think it'll work. Makes copy, but good enough for now.
+        '''
+        return self.data.__getitem__(*args)
+
 
 class TimeSeriesArray:
-    def __init__(self, nprod, nt, start_chan:int, end_chan:int, data=None):
+    def __init__(self, nprod:int, nt:int, start_chan:int, end_chan:int, data=None):
         if data is None:
             self.__data = np.zeros((nprod, nt))
         else:
@@ -174,16 +226,33 @@ class TimeSeriesArray:
         self.start_chan = start_chan
         self.end_chan = end_chan
 
-    @property
-    def raw_data(self):
-        return self.__data
 
-    def __getitem__(self, **args):
-        return self.__data.__getitem__(**args)
+    @property
+    def data(self):
+        '''
+        Return a copy of the data as a numpy array. Each product is offset
+        by the correct amount.
+        '''
+        assert self.offset <= 0, 'Being lazy here'
+        d = np.zeros_like(self.__data)
+        for iprod in range(d.shape[0]):
+            d[iprod, :] = self.__timeseries[iprod].data[:]
+        return d
+
+    def __getitem__(self, *args):
+        '''
+        Cheeky way of getting offset data array. Makes a copy.
+        '''
+        return self.data.__getitem__(*args)
+
+    
+
+
 
 def add_series_array(lower:TimeSeriesArray, upper:TimeSeriesArray, products:list[IterProduct], dout:TimeSeriesArray):
     '''
-    Add the upper time series to the lower time series at the given offset
+    Add the upper time series array to the lower time series array for the given products
+
     '''
 
     dout.start_chan = lower.start_chan if lower is not None else upper.start_chan
@@ -343,28 +412,33 @@ class EsamTree:
         return all_pids
 
 
-    def count_all_operations(self, op_counts = None):
+    def count_all_operations(self, lower_chan:int =0, upper_chan:int =None, op_counts = None):
         '''
         Counts the number of operations in each iteration and saves them in a list
         '''
 
+        if upper_chan is None:
+            upper_chan = self.ichan + self.nchan 
+
         if op_counts is None:
             op_counts = [0 for i in range(int(np.log2(self.nchan)) + 1) ]
+
+        out_of_range = upper_chan < self.start_chan or lower_chan > self.end_chan
+        if out_of_range:
+            return op_counts # terminate recursion early if we're outside the channel range. Signals "no data here"
 
         list_idx = int(np.log2(self.nchan))
 
         #print(f"{pid_counts}, {type(pid_counts)}, {pid_counts[list_idx]}, {type(pid_counts[list_idx])}")
-        if list_idx == 0:
+        if self.nchan == 1:
             #Means we are the lowest level - endnodes
             #Then we should not just count the number of products, but how many sums it will do during the convolution phase as well in each product
             for iprod in self._products:
                 op_counts[list_idx] += iprod.kernel.size
         else:
-            op_counts[list_idx] += len(self._products)
-
-        if self.nchan > 1:
-            self.lower.count_all_operations(op_counts)
-            self.upper.count_all_operations(op_counts)
+            op_counts[list_idx] += len(self._products)        
+            self.lower.count_all_operations(lower_chan, upper_chan, op_counts)
+            self.upper.count_all_operations(lower_chan, upper_chan, op_counts)
 
         return op_counts
 
